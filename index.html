@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Image Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-tr from-zinc-900 via-neutral-900 to-zinc-800 text-zinc-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-zinc-800/50 backdrop-blur-md p-8 rounded-2xl shadow-2xl max-w-lg w-full border border-zinc-700/50">
+        <div class="text-center mb-8">
+            <span class="text-xs font-bold uppercase tracking-widest text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">Web-Tool</span>
+            <h1 class="text-3xl font-black tracking-tight mt-3 text-white">Bild-Konverter</h1>
+            <p class="text-sm text-zinc-400 mt-2">Konvertiere blitzschnell zwischen PNG, JPG, SVG, WebP, ICO, BMP & TIFF.</p>
+        </div>
+
+        <form id="imageForm" class="space-y-6">
+            <div class="group relative border-2 border-dashed border-zinc-600 hover:border-emerald-500 rounded-xl p-8 transition-all text-center bg-zinc-900/40">
+                <input type="file" id="fileInput" accept="image/*,.svg,.ico,.bmp,.tiff" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div id="promptText" class="space-y-2">
+                    <div class="text-4xl">🖼️</div>
+                    <p class="text-sm font-medium text-zinc-300">Datei auswählen oder hierher ziehen</p>
+                    <p class="text-xs text-zinc-500">Alle gängigen Bildformate inkl. Vektoren</p>
+                </div>
+                <div id="fileDisplay" class="hidden text-emerald-400 font-semibold text-sm break-all"></div>
+            </div>
+
+            <div id="dropdownContainer" class="hidden space-y-2">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400">Zielformat wählen</label>
+                <select id="targetFormat" required class="block w-full border border-zinc-600 rounded-xl p-3 bg-zinc-900 text-white shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all">
+                    <option value="png">PNG (Verlustfrei, Transparenz)</option>
+                    <option value="jpg">JPG / JPEG (Komprimiert, ideal für Fotos)</option>
+                    <option value="webp">WebP (Modernes Web-Format)</option>
+                    <option value="ico">ICO (Favicon-Format, max 256x256)</option>
+                    <option value="svg">SVG (Vektor-Einbettung)</option>
+                    <option value="bmp">BMP (Unkomprimiertes Bitmap)</option>
+                    <option value="tiff">TIFF (Druck- & Archivformat)</option>
+                    <option value="gif">GIF (Standard-Bild)</option>
+                </select>
+            </div>
+
+            <button type="submit" id="submitBtn" disabled class="w-full bg-zinc-700 text-zinc-400 font-bold py-3 px-4 rounded-xl cursor-not-allowed transition-all duration-200">
+                Bitte lade zuerst ein Bild hoch
+            </button>
+        </form>
+
+        <div id="status" class="mt-6 p-4 rounded-xl text-center text-sm font-medium hidden"></div>
+    </div>
+
+    <script>
+        // Setze hier deine Live-URL von Render.com ein!
+        const BACKEND_URL = "https://image-converter-backend.onrender.com/convert";
+
+        const fileInput = document.getElementById('fileInput');
+        const promptText = document.getElementById('promptText');
+        const fileDisplay = document.getElementById('fileDisplay');
+        const dropdownContainer = document.getElementById('dropdownContainer');
+        const targetFormat = document.getElementById('targetFormat');
+        const submitBtn = document.getElementById('submitBtn');
+        const status = document.getElementById('status');
+
+        const allFormats = ['png', 'jpg', 'jpeg', 'webp', 'ico', 'svg', 'bmp', 'tiff', 'gif'];
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            promptText.classList.add('hidden');
+            fileDisplay.classList.remove('hidden');
+            fileDisplay.innerText = `Datei: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+
+            // Optionen filtern, sodass man nicht in das gleiche Format konvertieren kann
+            Array.from(targetFormat.options).forEach(option => {
+                if (option.value === ext || (ext === 'jpeg' && option.value === 'jpg')) {
+                    option.disabled = true;
+                } else {
+                    option.disabled = false;
+                }
+            });
+
+            // Falls das aktuell ausgewählte Format disabled wurde, wechsle zum ersten verfügbaren
+            if(targetFormat.selectedOptions[0].disabled) {
+                for (let opt of targetFormat.options) {
+                    if (!opt.disabled) {
+                        targetFormat.value = opt.value;
+                        break;
+                    }
+                }
+            }
+
+            dropdownContainer.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.className = "w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-950/50 transition-all cursor-pointer duration-200";
+            submitBtn.innerText = "Bild jetzt konvertieren";
+            status.classList.add('hidden');
+        });
+
+        document.getElementById('imageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if(!file) return;
+
+            status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20";
+            status.innerText = "Bild wird serverseitig konvertiert...";
+            status.classList.remove('hidden');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('target_format', targetFormat.value);
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if(!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || "Ein unbekannter Fehler ist aufgetreten.");
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                a.download = `${baseName}.${targetFormat.value}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                status.innerText = "Erfolgreich konvertiert! Download läuft.";
+            } catch (err) {
+                status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20";
+                status.innerText = err.message;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
+            }
+        });
+    </script>
+</body>
+</html>
